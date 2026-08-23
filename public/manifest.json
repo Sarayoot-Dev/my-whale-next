@@ -1,0 +1,9 @@
+{
+  "name": "My Whale — บันทึกลูกน้อย",
+  "short_name": "My Whale",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#EEF3F8",
+  "theme_color": "#134074",
+  "icons": []
+}

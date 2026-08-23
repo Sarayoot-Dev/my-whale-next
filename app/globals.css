@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background-color: #EAF4FB;
+  background-image: radial-gradient(ellipse 100% 35% at 50% 0%, rgba(214, 236, 251, 0.7), rgba(234, 244, 251, 0) 70%);
+  background-repeat: no-repeat;
+  color: #2D3A4A;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid #4F9DDE;
+  outline-offset: 2px;
+}
+
+.tabular-data {
+  font-variant-numeric: tabular-nums;
+}
