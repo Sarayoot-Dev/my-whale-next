@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { watchAuth, signIn, handleRedirectResult } from "@/lib/firebase";
+import Script from "next/script";
+import { watchAuth, signIn, initGoogleSignIn } from "@/lib/firebase";
 import { getChild, watchActivities, addActivity, deleteActivity, ACTIVITY_TYPES } from "@/lib/family";
 import BottomNav from "@/components/BottomNav";
 import WaveDivider from "@/components/WaveDivider";
@@ -84,10 +85,6 @@ export default function Dashboard() {
   useEffect(() => watchAuth(setUser), []);
 
   useEffect(() => {
-    handleRedirectResult().catch((e) => console.error("getRedirectResult error", e));
-  }, []);
-
-  useEffect(() => {
     if (!user) return;
     getChild(CHILD_ID).then(setChild);
     const unsub = watchActivities(CHILD_ID, setActivities, { max: 50 });
@@ -118,6 +115,11 @@ export default function Dashboard() {
 
   return (
     <main className="mx-auto min-h-screen max-w-md px-4 pb-24 pt-8">
+      <Script
+        src="https://accounts.google.com/gsi/client"
+        strategy="afterInteractive"
+        onLoad={initGoogleSignIn}
+      />
       <header className="mb-2">
         <h1 className="font-display text-2xl font-bold text-abyss">🐳 My Whale</h1>
         <WaveDivider className="mt-2 text-shallow" />
