@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { watchAuth, signIn } from "@/lib/firebase";
+import { watchAuth, signIn, handleRedirectResult } from "@/lib/firebase";
 import { getChild, watchActivities, addActivity, deleteActivity, ACTIVITY_TYPES } from "@/lib/family";
 import BottomNav from "@/components/BottomNav";
 import WaveDivider from "@/components/WaveDivider";
@@ -82,6 +82,10 @@ export default function Dashboard() {
   const [, forceTick] = useState(0);
 
   useEffect(() => watchAuth(setUser), []);
+
+  useEffect(() => {
+    handleRedirectResult().catch((e) => console.error("getRedirectResult error", e));
+  }, []);
 
   useEffect(() => {
     if (!user) return;
