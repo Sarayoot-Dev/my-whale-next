@@ -10,9 +10,10 @@ const CHILD_ID = process.env.NEXT_PUBLIC_CHILD_ID || "main";
 
 const ITEMS = [
   { href: "/", label: "หน้าหลัก", icon: "🏠" },
-  { href: "/timeline", label: "ไทม์ไลน์", icon: "📖" },
-  { href: "/calendar", label: "ปฏิทิน", icon: "📅" },
-  { href: "/settings", label: "ตั้งค่า", icon: "⚙️" },
+  { href: "/health", label: "ศูนย์สุขภาพ", icon: "🩺" },
+  { href: "/feed", label: "Feed", icon: "🍼" },
+  { href: "/diaper", label: "ขับถ่าย", icon: "🧷" },
+  { href: "/calendar", label: "นัดหมาย", icon: "📅" },
 ];
 
 export default function BottomNav() {
@@ -57,7 +58,8 @@ export default function BottomNav() {
     >
       <ul className="mx-auto flex max-w-md justify-between px-3 py-2">
         {ITEMS.map((item) => {
-          const active = pathname === item.href;
+          const active =
+            item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
           const showBadge = item.href === "/calendar" && dueSoonCount > 0;
           return (
             <li key={item.href} className="flex-1">
