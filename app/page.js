@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Script from "next/script";
 import { watchAuth, signIn, initGoogleSignIn } from "@/lib/firebase";
-import { getChild, watchActivities, watchAppointments } from "@/lib/family";
+import { getChild, saveChild, watchActivities, watchAppointments } from "@/lib/family";
+import { uploadChildProfilePhoto } from "@/lib/storage";
+import { resizeImageToJpeg } from "@/lib/image";
 import BottomNav from "@/components/BottomNav";
 import WaveDivider from "@/components/WaveDivider";
 
@@ -70,7 +72,9 @@ export default function Dashboard() {
   const [activities, setActivities] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [dismissedAlerts, setDismissedAlerts] = useState([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [, forceTick] = useState(0);
+  const photoInputRef = useRef(null);
 
   useEffect(() => watchAuth(setUser), []);
 
@@ -134,6 +138,23 @@ export default function Dashboard() {
       .forEach((a) => list.push({ id: `vaccine-${a.id}`, icon: "💉", text: `วันนี้มีนัดฉีดวัคซีน: ${a.title}` }));
     return list.filter((a) => !dismissedAlerts.includes(a.id));
   }, [latestMilk, appointments, dismissedAlerts]);
+
+  async function handlePhotoChange(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const blob = await resizeImageToJpeg(file, 800, 0.8);
+      const photoURL = await uploadChildProfilePhoto(CHILD_ID, blob);
+      await saveChild(CHILD_ID, { photoURL });
+      setChild((c) => ({ ...c, photoURL }));
+    } catch (err) {
+      console.error("profile photo upload failed", err);
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = "";
+    }
+  }
 
   return (
     <main className="mx-auto min-h-screen max-w-md px-4 pb-24 pt-8">
@@ -206,9 +227,34 @@ export default function Dashboard() {
           <section className="rounded-xl2 bg-white p-5 shadow-log">
             <p className="mb-3 text-sm text-abyss/60">{greeting()}</p>
             <div className="flex items-center gap-4">
-              <div className="flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-shallow to-tide/20 text-4xl shadow-log">
-                🐳
-              </div>
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                aria-label="เปลี่ยนรูปโปรไฟล์ลูก"
+                className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-shallow to-tide/20 text-4xl shadow-log"
+              >
+                {child?.photoURL ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={child.photoURL} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  "🐳"
+                )}
+                {uploadingPhoto && (
+                  <span className="absolute inset-0 flex items-center justify-center bg-abyss/40 text-xs text-white">
+                    ...
+                  </span>
+                )}
+                <span className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-tide text-xs shadow-log">
+                  📷
+                </span>
+              </button>
+              <input
+                ref={photoInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handlePhotoChange}
+                className="hidden"
+              />
               <div>
                 <p className="font-display text-xl font-semibold text-abyss">
                   {child?.name || "ยังไม่ตั้งชื่อ"}
