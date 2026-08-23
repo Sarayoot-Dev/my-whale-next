@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { Timestamp } from "firebase/firestore";
 import { watchAuth } from "@/lib/firebase";
-import { getChild, addActivity, watchActivities } from "@/lib/family";
+import { getChild, addActivity, updateActivity, deleteActivity, watchActivities } from "@/lib/family";
 import { getGrowthPercentileCurve, getGrowthZScore, ageInDaysFromDob } from "@/lib/growth";
 import BottomNav from "@/components/BottomNav";
 import WaveDivider from "@/components/WaveDivider";
@@ -37,12 +38,26 @@ function mergeChildSeries(curve, entries, valueKey) {
   return Array.from(map.values()).sort((a, b) => a.ageMonths - b.ageMonths);
 }
 
+function toDateInputValue(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function formatDate(ts) {
+  if (!ts?.toDate) return "";
+  return ts.toDate().toLocaleDateString("th-TH", { day: "numeric", month: "short", year: "numeric" });
+}
+
 export default function GrowthPage() {
   const [user, setUser] = useState(undefined);
   const [child, setChild] = useState(null);
   const [activities, setActivities] = useState([]);
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
+  const [dateInput, setDateInput] = useState("");
+  const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [weightCurve, setWeightCurve] = useState([]);
   const [heightCurve, setHeightCurve] = useState([]);
@@ -95,6 +110,12 @@ export default function GrowthPage() {
 
   const latestGrowth = growthEntries[growthEntries.length - 1];
 
+  const growthHistory = useMemo(() => {
+    return activities
+      .filter((a) => a.type === "growth" && a.value)
+      .sort((a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0));
+  }, [activities]);
+
   useEffect(() => {
     if (!latestGrowth) {
       setWeightZ(null);
@@ -105,15 +126,43 @@ export default function GrowthPage() {
     getGrowthZScore("height", gender, latestGrowth.ageDays, latestGrowth.value.height).then(setHeightZ);
   }, [latestGrowth, gender]);
 
+  function handleEditClick(entry) {
+    setEditingId(entry.id);
+    setWeight(String(entry.value.weight));
+    setHeight(String(entry.value.height));
+    setDateInput(
+      toDateInputValue(entry.createdAt?.toDate ? entry.createdAt.toDate() : new Date())
+    );
+  }
+
+  function handleCancelEdit() {
+    setEditingId(null);
+    setWeight("");
+    setHeight("");
+    setDateInput("");
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm("ลบรายการนี้ใช่ไหม?")) return;
+    if (editingId === id) handleCancelEdit();
+    await deleteActivity(CHILD_ID, id);
+  }
+
   async function handleSave(e) {
     e.preventDefault();
     if (!weight || !height) return;
     setSaving(true);
     try {
-      await addActivity(CHILD_ID, {
-        type: "growth",
-        value: { weight: Number(weight), height: Number(height) },
-      });
+      const value = { weight: Number(weight), height: Number(height) };
+      if (editingId) {
+        const data = { value };
+        if (dateInput) data.createdAt = Timestamp.fromDate(new Date(`${dateInput}T12:00:00`));
+        await updateActivity(CHILD_ID, editingId, data);
+        setEditingId(null);
+        setDateInput("");
+      } else {
+        await addActivity(CHILD_ID, { type: "growth", value });
+      }
       setWeight("");
       setHeight("");
     } finally {
@@ -189,32 +238,57 @@ export default function GrowthPage() {
 
       {user && child?.dob && (
         <div className="mt-4 space-y-4">
-          <form onSubmit={handleSave} className="flex gap-2 rounded-xl2 bg-white p-4 shadow-log">
-            <input
-              type="number"
-              step="0.01"
-              placeholder="น้ำหนัก (กก.)"
-              value={weight}
-              onChange={(e) => setWeight(e.target.value)}
-              className="w-1/2 rounded-lg border border-shallow px-3 py-2 text-sm"
-              required
-            />
-            <input
-              type="number"
-              step="0.1"
-              placeholder="ส่วนสูง (ซม.)"
-              value={height}
-              onChange={(e) => setHeight(e.target.value)}
-              className="w-1/2 rounded-lg border border-shallow px-3 py-2 text-sm"
-              required
-            />
-            <button
-              type="submit"
-              disabled={saving}
-              className="shrink-0 rounded-full bg-tide px-4 text-sm font-semibold text-white disabled:opacity-60"
-            >
-              {saving ? "..." : "บันทึก"}
-            </button>
+          <form onSubmit={handleSave} className="space-y-3 rounded-xl2 bg-white p-4 shadow-log">
+            <div className="flex gap-2">
+              <input
+                type="number"
+                step="0.01"
+                placeholder="น้ำหนัก (กก.)"
+                value={weight}
+                onChange={(e) => setWeight(e.target.value)}
+                className="w-1/2 rounded-lg border border-shallow px-3 py-2 text-sm"
+                required
+              />
+              <input
+                type="number"
+                step="0.1"
+                placeholder="ส่วนสูง (ซม.)"
+                value={height}
+                onChange={(e) => setHeight(e.target.value)}
+                className="w-1/2 rounded-lg border border-shallow px-3 py-2 text-sm"
+                required
+              />
+            </div>
+            {editingId && (
+              <label className="block text-xs text-abyss/50">
+                วันที่บันทึก
+                <input
+                  type="date"
+                  value={dateInput}
+                  onChange={(e) => setDateInput(e.target.value)}
+                  className="mt-1 w-full rounded-lg border border-shallow px-3 py-2 text-sm"
+                  required
+                />
+              </label>
+            )}
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={saving}
+                className="h-11 flex-1 rounded-full bg-tide text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {saving ? "..." : editingId ? "บันทึกการแก้ไข" : "เพิ่มรายการ"}
+              </button>
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="h-11 shrink-0 rounded-full border border-shallow px-4 text-sm font-semibold text-abyss/60"
+                >
+                  ยกเลิก
+                </button>
+              )}
+            </div>
           </form>
 
           {latestGrowth && (
@@ -247,6 +321,46 @@ export default function GrowthPage() {
           <section className="rounded-xl2 bg-white p-4 shadow-log">
             <p className="mb-1 text-sm font-semibold text-abyss/60">ส่วนสูงตามอายุ (ซม.)</p>
             {renderChart(heightChartData, "ส่วนสูง")}
+          </section>
+
+          <section>
+            <h2 className="mb-2 text-sm font-semibold text-abyss/60">ประวัติการบันทึก</h2>
+            <ul className="space-y-2">
+              {growthHistory.map((a) => (
+                <li
+                  key={a.id}
+                  className="flex items-center justify-between rounded-xl2 bg-white p-3 shadow-log"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-abyss">
+                      {a.value.weight} กก. · {a.value.height} ซม.
+                    </p>
+                    <p className="text-xs text-abyss/40">{formatDate(a.createdAt)}</p>
+                  </div>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => handleEditClick(a)}
+                      aria-label="แก้ไขรายการนี้"
+                      className="rounded-full px-2 py-1 text-xs text-abyss/30 hover:bg-surface hover:text-abyss/60"
+                    >
+                      ✏️
+                    </button>
+                    <button
+                      onClick={() => handleDelete(a.id)}
+                      aria-label="ลบรายการนี้"
+                      className="rounded-full px-2 py-1 text-xs text-abyss/30 hover:bg-surface hover:text-abyss/60"
+                    >
+                      ลบ
+                    </button>
+                  </div>
+                </li>
+              ))}
+              {growthHistory.length === 0 && (
+                <li className="rounded-xl2 bg-white p-6 text-center text-sm text-abyss/30 shadow-log">
+                  ยังไม่มีประวัติการบันทึก
+                </li>
+              )}
+            </ul>
           </section>
 
           <p className="text-center text-[11px] text-abyss/30">
