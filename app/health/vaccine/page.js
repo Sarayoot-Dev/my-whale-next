@@ -10,6 +10,15 @@ import WaveDivider from "@/components/WaveDivider";
 
 const CHILD_ID = process.env.NEXT_PUBLIC_CHILD_ID || "main";
 
+function formatDateInput(dateStr) {
+  if (!dateStr) return "";
+  return new Date(`${dateStr}T12:00:00`).toLocaleDateString("th-TH", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 export default function VaccinePage() {
   const [user, setUser] = useState(undefined);
   const [vaccinesDone, setVaccinesDone] = useState({});
@@ -20,6 +29,9 @@ export default function VaccinePage() {
   const [foodAllergies, setFoodAllergies] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [otherVaccines, setOtherVaccines] = useState([]);
+  const [otherVaccineName, setOtherVaccineName] = useState("");
+  const [otherVaccineDate, setOtherVaccineDate] = useState("");
 
   useEffect(() => watchAuth(setUser), []);
 
@@ -32,6 +44,7 @@ export default function VaccinePage() {
       setMedications(c?.medications || "");
       setDrugAllergies(c?.drugAllergies || "");
       setFoodAllergies(c?.foodAllergies || "");
+      setOtherVaccines(c?.otherVaccines || []);
     });
   }, [user]);
 
@@ -39,6 +52,25 @@ export default function VaccinePage() {
     const next = { ...vaccinesDone, [key]: !vaccinesDone[key] };
     setVaccinesDone(next);
     await saveChild(CHILD_ID, { vaccinesDone: { [key]: next[key] } });
+  }
+
+  async function handleAddOtherVaccine(e) {
+    e.preventDefault();
+    if (!otherVaccineName.trim()) return;
+    const next = [
+      ...otherVaccines,
+      { id: `${Date.now()}`, name: otherVaccineName.trim(), date: otherVaccineDate },
+    ];
+    setOtherVaccines(next);
+    setOtherVaccineName("");
+    setOtherVaccineDate("");
+    await saveChild(CHILD_ID, { otherVaccines: next });
+  }
+
+  async function handleRemoveOtherVaccine(id) {
+    const next = otherVaccines.filter((v) => v.id !== id);
+    setOtherVaccines(next);
+    await saveChild(CHILD_ID, { otherVaccines: next });
   }
 
   async function handleSaveInfo(e) {
@@ -149,6 +181,64 @@ export default function VaccinePage() {
                   </label>
                 </li>
               ))}
+            </ul>
+          </section>
+
+          <section className="rounded-xl2 bg-white p-4 shadow-log">
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-abyss/60">วัคซีนอื่นๆ</h2>
+              <span className="text-xs text-abyss/40">{otherVaccines.length} รายการ</span>
+            </div>
+
+            <form onSubmit={handleAddOtherVaccine} className="mb-3 space-y-2">
+              <input
+                type="text"
+                placeholder="ชื่อวัคซีน เช่น RSV, IPD, Rabies"
+                value={otherVaccineName}
+                onChange={(e) => setOtherVaccineName(e.target.value)}
+                className="w-full rounded-lg border border-shallow px-3 py-2 text-sm"
+              />
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  value={otherVaccineDate}
+                  max={new Date().toISOString().slice(0, 10)}
+                  onChange={(e) => setOtherVaccineDate(e.target.value)}
+                  className="w-full rounded-lg border border-shallow px-3 py-2 text-sm"
+                />
+                <button
+                  type="submit"
+                  className="h-10 shrink-0 rounded-full bg-tide px-4 text-sm font-semibold text-white"
+                >
+                  + เพิ่ม
+                </button>
+              </div>
+            </form>
+
+            <ul className="space-y-1">
+              {otherVaccines.map((v) => (
+                <li
+                  key={v.id}
+                  className="flex items-center justify-between gap-3 rounded-lg p-2 hover:bg-surface"
+                >
+                  <div className="flex-1">
+                    <p className="text-sm text-abyss">{v.name}</p>
+                    {v.date && (
+                      <p className="text-[11px] text-abyss/40">{formatDateInput(v.date)}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => handleRemoveOtherVaccine(v.id)}
+                    aria-label="ลบรายการนี้"
+                    className="shrink-0 rounded-full px-2 py-1 text-xs text-abyss/30 hover:bg-white hover:text-abyss/60"
+                  >
+                    ลบ
+                  </button>
+                </li>
+              ))}
+              {otherVaccines.length === 0 && (
+                <li className="py-2 text-center text-sm text-abyss/30">ยังไม่มีรายการ</li>
+              )}
             </ul>
           </section>
         </div>
