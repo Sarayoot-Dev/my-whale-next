@@ -179,6 +179,11 @@ export default function Dashboard() {
       const photoURL = await uploadChildProfilePhoto(CHILD_ID, blob);
       await saveChild(CHILD_ID, { photoURL });
       setChild((c) => ({ ...c, photoURL }));
+      // Wait a full paint cycle so the Dashboard behind the modal has
+      // actually rendered the new photo before the modal (which is covering
+      // it) gets removed — otherwise there's a frame where the old avatar
+      // is briefly visible under the still-fading-out modal.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       setCropFile(null);
       if (photoInputRef.current) photoInputRef.current.value = "";
     } catch (err) {

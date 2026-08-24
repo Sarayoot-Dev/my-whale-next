@@ -83,10 +83,21 @@ export default function AvatarCropModal({ file, saving, error, onCancel, onSave 
     setLoadError("เปิดไฟล์รูปนี้ไม่ได้ (อาจเป็นไฟล์ HEIC หรือไฟล์เสีย) ลองเลือกรูปอื่นดูครับ");
   }
 
+  // Local flag covers the gap between tapping "บันทึก" and the parent's
+  // `saving` prop turning true (cropping the canvas takes a beat) — without
+  // it the button stays tappable for a moment after the first tap.
+  const [preparing, setPreparing] = useState(false);
+  const busy = saving || preparing;
+
   async function handleSaveClick() {
-    if (!croppedAreaPixels) return;
-    const blob = await getCroppedBlob(imageSrc, croppedAreaPixels);
-    onSave(blob);
+    if (!croppedAreaPixels || busy) return;
+    setPreparing(true);
+    try {
+      const blob = await getCroppedBlob(imageSrc, croppedAreaPixels);
+      onSave(blob);
+    } finally {
+      setPreparing(false);
+    }
   }
 
   return (
@@ -117,6 +128,21 @@ export default function AvatarCropModal({ file, saving, error, onCancel, onSave 
             {loadError}
           </p>
         )}
+
+        {/* Full-screen loading state while the crop/resize/upload/save chain
+            runs, so the interactive cropper never sits there disabled with
+            no clear feedback — the modal stays mounted and opaque the whole
+            time, and only unmounts once the Dashboard behind it has already
+            painted the new photo (see handleCropSave's double-rAF wait). */}
+        {busy && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-abyss/95">
+            <span
+              className="h-10 w-10 animate-spin rounded-full border-4 border-white/25 border-t-white"
+              aria-hidden="true"
+            />
+            <p className="text-sm text-white">กำลังบันทึกรูป...</p>
+          </div>
+        )}
       </div>
 
       <div className="space-y-4 bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-log">
@@ -143,7 +169,7 @@ export default function AvatarCropModal({ file, saving, error, onCancel, onSave 
           <button
             type="button"
             onClick={onCancel}
-            disabled={saving}
+            disabled={busy}
             className="h-14 flex-1 rounded-full border border-shallow text-base font-semibold text-abyss/60 disabled:opacity-60"
           >
             ยกเลิก
@@ -151,10 +177,10 @@ export default function AvatarCropModal({ file, saving, error, onCancel, onSave 
           <button
             type="button"
             onClick={handleSaveClick}
-            disabled={saving || !croppedAreaPixels}
+            disabled={busy || !croppedAreaPixels}
             className="h-14 flex-1 rounded-full bg-tide text-base font-semibold text-white disabled:opacity-60"
           >
-            {saving ? "กำลังบันทึก..." : "บันทึก"}
+            {busy ? "กำลังบันทึก..." : "บันทึก"}
           </button>
         </div>
       </div>
