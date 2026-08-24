@@ -3,10 +3,34 @@
 import { useEffect, useRef, useState } from "react";
 import { watchAuth } from "@/lib/firebase";
 import { uploadPhoto, deletePhoto, watchPhotos } from "@/lib/storage";
+import { resizeImageToJpeg } from "@/lib/image";
 import BottomNav from "@/components/BottomNav";
 import WaveDivider from "@/components/WaveDivider";
 
 const CHILD_ID = process.env.NEXT_PUBLIC_CHILD_ID || "main";
+
+// Shows a graceful fallback instead of the browser's raw broken-image icon
+// (which some mobile in-app browsers render as a stray glyph overlapping the
+// delete button) when a photo URL fails to load.
+function PhotoThumbnail({ url }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div className="flex aspect-square w-full items-center justify-center bg-surface text-center text-[11px] text-abyss/30">
+        โหลดรูปไม่สำเร็จ
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={url}
+      alt=""
+      className="aspect-square w-full object-cover"
+      onError={() => setFailed(true)}
+    />
+  );
+}
 
 export default function GalleryPage() {
   const [user, setUser] = useState(undefined);
@@ -28,10 +52,20 @@ export default function GalleryPage() {
     setUploading(true);
     setError("");
     try {
-      await uploadPhoto(CHILD_ID, file, user?.displayName || "");
+      // Normalize to a resized JPEG before upload — mobile camera photos can
+      // be huge, and some formats (e.g. HEIC from iPhones) aren't renderable
+      // by <img> in most browsers, which is what causes a broken-image icon
+      // to show up in the grid right after picking one.
+      const blob = await resizeImageToJpeg(file, 1600, 0.85);
+      const baseName = file.name.replace(/\.[^.]+$/, "") || "photo";
+      await uploadPhoto(CHILD_ID, blob, user?.displayName || "", `${baseName}.jpg`);
     } catch (err) {
       console.error(err);
-      setError("อัพโหลดไม่สำเร็จ ลองใหม่อีกครั้งครับ (ตรวจสอบว่าเปิด Firebase Storage แล้วหรือยัง)");
+      setError(
+        err?.message === "Failed to load image"
+          ? "ไฟล์รูปภาพนี้เปิดไม่ได้ (เช่น HEIC) กรุณาเลือกไฟล์ JPG/PNG หรือแปลงไฟล์ก่อนอัพโหลด"
+          : "อัพโหลดไม่สำเร็จ ลองใหม่อีกครั้งครับ (ตรวจสอบว่าเปิด Firebase Storage แล้วหรือยัง)"
+      );
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -73,8 +107,7 @@ export default function GalleryPage() {
       <div className="mt-4 grid grid-cols-2 gap-3">
         {photos.map((p) => (
           <div key={p.id} className="group relative overflow-hidden rounded-xl2 shadow-log">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={p.url} alt="" className="aspect-square w-full object-cover" />
+            <PhotoThumbnail url={p.url} />
             <button
               onClick={() => handleDelete(p)}
               aria-label="ลบรูปนี้"
