@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import Cropper from "react-easy-crop";
 
 // Data URIs (vs. URL.createObjectURL) avoid any object-URL lifecycle races —
@@ -51,7 +51,7 @@ function getCroppedBlob(imageSrc, cropPixels) {
   });
 }
 
-export default function AvatarCropModal({ file, saving, error, onCancel, onSave }) {
+export default function AvatarCropModal({ file, saving, error, closing, onCancel, onSave, onClosed }) {
   const [imageSrc, setImageSrc] = useState("");
   const [loadError, setLoadError] = useState("");
   const [crop, setCrop] = useState({ x: 0, y: 0 });
@@ -79,6 +79,34 @@ export default function AvatarCropModal({ file, saving, error, onCancel, onSave 
     setCroppedAreaPixels(pixels);
   }, []);
 
+  // Fades the modal out over `transition-opacity duration-200` instead of
+  // yanking it out of the DOM instantly — an abrupt unmount was what made
+  // the Dashboard underneath look like it "popped" into view mid-frame.
+  // onTransitionEnd tells the parent when it's actually safe to unmount;
+  // the timeout is a fallback in case the transition event doesn't fire.
+  const closedRef = useRef(false);
+  useEffect(() => {
+    if (!closing) {
+      closedRef.current = false;
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (!closedRef.current) {
+        closedRef.current = true;
+        onClosed?.();
+      }
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [closing, onClosed]);
+
+  function handleTransitionEnd(e) {
+    if (e.target !== e.currentTarget || e.propertyName !== "opacity") return;
+    if (closing && !closedRef.current) {
+      closedRef.current = true;
+      onClosed?.();
+    }
+  }
+
   function handleMediaError() {
     setLoadError("เปิดไฟล์รูปนี้ไม่ได้ (อาจเป็นไฟล์ HEIC หรือไฟล์เสีย) ลองเลือกรูปอื่นดูครับ");
   }
@@ -101,7 +129,12 @@ export default function AvatarCropModal({ file, saving, error, onCancel, onSave 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-abyss">
+    <div
+      className={`fixed inset-0 z-50 flex flex-col bg-abyss transition-opacity duration-200 ease-out ${
+        closing ? "pointer-events-none opacity-0" : "opacity-100"
+      }`}
+      onTransitionEnd={handleTransitionEnd}
+    >
       <div className="relative flex-1">
         {imageSrc && (
           <Cropper
@@ -132,8 +165,7 @@ export default function AvatarCropModal({ file, saving, error, onCancel, onSave 
         {/* Full-screen loading state while the crop/resize/upload/save chain
             runs, so the interactive cropper never sits there disabled with
             no clear feedback — the modal stays mounted and opaque the whole
-            time, and only unmounts once the Dashboard behind it has already
-            painted the new photo (see handleCropSave's double-rAF wait). */}
+            time this is up. */}
         {busy && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-abyss/95">
             <span
