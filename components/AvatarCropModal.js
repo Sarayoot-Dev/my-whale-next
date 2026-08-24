@@ -1,7 +1,19 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import Cropper from "react-easy-crop";
+
+// Data URIs (vs. URL.createObjectURL) avoid any object-URL lifecycle races —
+// there's nothing to revoke, so there's no window where the <img> inside
+// Cropper can end up pointed at an already-revoked blob URL.
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error("Failed to read file"));
+    reader.readAsDataURL(file);
+  });
+}
 
 // Draws the cropped region (in the source image's natural pixel coordinates,
 // as reported by react-easy-crop's onCropComplete) onto a canvas and reads it
@@ -41,19 +53,35 @@ function getCroppedBlob(imageSrc, cropPixels) {
 
 export default function AvatarCropModal({ file, saving, error, onCancel, onSave }) {
   const [imageSrc, setImageSrc] = useState("");
+  const [loadError, setLoadError] = useState("");
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState(null);
 
   useEffect(() => {
-    const url = URL.createObjectURL(file);
-    setImageSrc(url);
-    return () => URL.revokeObjectURL(url);
+    let cancelled = false;
+    setImageSrc("");
+    setLoadError("");
+    readFileAsDataUrl(file)
+      .then((dataUrl) => {
+        if (!cancelled) setImageSrc(dataUrl);
+      })
+      .catch((err) => {
+        console.error(err);
+        if (!cancelled) setLoadError("โหลดรูปนี้ไม่สำเร็จ ลองเลือกรูปอื่นดูครับ");
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [file]);
 
   const handleCropComplete = useCallback((_, pixels) => {
     setCroppedAreaPixels(pixels);
   }, []);
+
+  function handleMediaError() {
+    setLoadError("เปิดไฟล์รูปนี้ไม่ได้ (อาจเป็นไฟล์ HEIC หรือไฟล์เสีย) ลองเลือกรูปอื่นดูครับ");
+  }
 
   async function handleSaveClick() {
     if (!croppedAreaPixels) return;
@@ -73,10 +101,21 @@ export default function AvatarCropModal({ file, saving, error, onCancel, onSave 
             cropShape="round"
             showGrid={false}
             objectFit="contain"
+            mediaProps={{ onError: handleMediaError }}
             onCropChange={setCrop}
             onZoomChange={setZoom}
             onCropComplete={handleCropComplete}
           />
+        )}
+        {!imageSrc && !loadError && (
+          <p className="flex h-full items-center justify-center text-sm text-white/60">
+            กำลังโหลดรูป...
+          </p>
+        )}
+        {loadError && (
+          <p className="flex h-full items-center justify-center px-8 text-center text-sm text-white/80">
+            {loadError}
+          </p>
         )}
       </div>
 
@@ -92,7 +131,8 @@ export default function AvatarCropModal({ file, saving, error, onCancel, onSave 
             step={0.01}
             value={zoom}
             onChange={(e) => setZoom(Number(e.target.value))}
-            className="h-8 flex-1 accent-tide"
+            disabled={!imageSrc}
+            className="h-8 flex-1 accent-tide disabled:opacity-40"
             aria-label="ซูมรูป"
           />
         </label>
