@@ -71,7 +71,10 @@ export default function FeedPage() {
       todayEntries.map((a) => ({
         time: timeLabel(a.createdAt),
         จำนวน: kind === "milk" ? Number(a.amountOz) || 0 : 1,
-        label: kind === "milk" ? `${a.amountOz} oz (${MILK_TYPES[a.milkType] || ""})` : a.menu,
+        label:
+          kind === "milk"
+            ? `${a.amountOz != null ? `${a.amountOz} oz` : "ไม่ระบุปริมาณ"} (${MILK_TYPES[a.milkType] || ""})`
+            : a.menu,
       })),
     [todayEntries, kind]
   );
@@ -81,8 +84,11 @@ export default function FeedPage() {
     setSaving(true);
     try {
       if (kind === "milk") {
-        if (!amountOz) return;
-        await addActivity(CHILD_ID, { type: "milk", amountOz: Number(amountOz), milkType });
+        await addActivity(CHILD_ID, {
+          type: "milk",
+          amountOz: amountOz ? Number(amountOz) : null,
+          milkType,
+        });
         setAmountOz("");
       } else {
         if (!menu) return;
@@ -124,11 +130,13 @@ export default function FeedPage() {
                 <input
                   type="number"
                   step="0.5"
-                  placeholder="จำนวนออนส์"
+                  placeholder={
+                    milkType === "breast" ? "จำนวนออนส์ (ไม่ระบุก็ได้)" : "จำนวนออนส์"
+                  }
                   value={amountOz}
                   onChange={(e) => setAmountOz(e.target.value)}
                   className="w-full rounded-lg border border-shallow px-3 py-2 text-sm"
-                  required
+                  required={milkType !== "breast"}
                 />
                 <div className="flex gap-2">
                   {Object.entries(MILK_TYPES).map(([key, label]) => (
@@ -214,7 +222,11 @@ export default function FeedPage() {
                 >
                   <div>
                     <p className="text-sm font-medium text-abyss">
-                      {kind === "milk" ? `${a.amountOz} oz · ${MILK_TYPES[a.milkType] || ""}` : a.menu}
+                      {kind === "milk"
+                        ? `${a.amountOz != null ? `${a.amountOz} oz` : "ไม่ระบุปริมาณ"} · ${
+                            MILK_TYPES[a.milkType] || ""
+                          }`
+                        : a.menu}
                       {kind === "food" && a.amount ? ` · ${a.amount}` : ""}
                     </p>
                     <p className="text-xs text-abyss/40">{timeLabel(a.createdAt)}</p>
