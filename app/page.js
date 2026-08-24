@@ -231,7 +231,7 @@ export default function Dashboard() {
                 type="button"
                 onClick={() => photoInputRef.current?.click()}
                 aria-label="เปลี่ยนรูปโปรไฟล์ลูก"
-                className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-shallow to-tide/20 text-4xl shadow-log"
+                className="relative flex h-32 w-32 shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-shallow to-tide/20 text-6xl shadow-log"
               >
                 {child?.photoURL ? (
                   // eslint-disable-next-line @next/next/no-img-element
@@ -244,7 +244,7 @@ export default function Dashboard() {
                     ...
                   </span>
                 )}
-                <span className="absolute bottom-0 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-tide text-xs shadow-log">
+                <span className="absolute bottom-0 right-0 flex h-8 w-8 items-center justify-center rounded-full bg-tide text-sm shadow-log">
                   📷
                 </span>
               </button>
