@@ -91,7 +91,6 @@ export default function Dashboard() {
   const [dismissedAlerts, setDismissedAlerts] = useState([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [cropFile, setCropFile] = useState(null);
-  const [closingCrop, setClosingCrop] = useState(false);
   const [cropError, setCropError] = useState("");
   const [, forceTick] = useState(0);
   const photoInputRef = useRef(null);
@@ -163,25 +162,29 @@ export default function Dashboard() {
     const file = e.target.files?.[0];
     if (!file) return;
     setCropError("");
-    setClosingCrop(false);
     setCropFile(file);
   }
 
-  // Starts the modal's fade-out; the modal calls handleCropModalClosed once
-  // the fade animation actually finishes, which is when we unmount it.
-  function closeCropModal() {
-    setClosingCrop(true);
-  }
-
-  function handleCropModalClosed() {
-    setCropFile(null);
-    setClosingCrop(false);
-  }
-
   function handleCropCancel() {
-    closeCropModal();
+    setCropFile(null);
     setCropError("");
     if (photoInputRef.current) photoInputRef.current.value = "";
+  }
+
+  // Waits until the browser has the image's bitmap fully decoded and ready
+  // to paint — not just "the network request finished" (onload can fire
+  // before decode is done) and not just "React committed the DOM change"
+  // (a fresh <img src> still has to decode before it paints). This is the
+  // actual guarantee we need before it's safe to reveal the Dashboard
+  // avatar without a blank/partial frame showing through.
+  function preloadImage(url) {
+    const img = new Image();
+    img.src = url;
+    if (img.decode) return img.decode().catch(() => {});
+    return new Promise((resolve) => {
+      img.onload = resolve;
+      img.onerror = resolve;
+    });
   }
 
   async function handleCropSave(croppedBlob) {
@@ -189,21 +192,23 @@ export default function Dashboard() {
     setCropError("");
     try {
       const blob = await resizeImageToJpeg(croppedBlob, 800, 0.8);
-      // Show the freshly-cropped photo immediately via a local object URL —
-      // its pixels are already decoded in memory, so the Dashboard avatar
-      // behind the modal has the entire upload duration to load and paint
-      // it. Without this, the avatar only starts fetching the brand-new
-      // (never-cached) Storage URL right as the modal disappears, which is
-      // what caused the blank/overlapping flash — that fetch takes at least
-      // one network round trip, nowhere near instant.
+      // Show the freshly-cropped photo via a local object URL, pre-decoded
+      // before it's ever assigned to child.photoURL — the Dashboard avatar
+      // behind the modal can then paint it immediately once committed,
+      // instead of starting a decode (or, with the old code, a full network
+      // fetch of the brand-new Storage URL) right as the modal disappears.
       const previewURL = URL.createObjectURL(blob);
+      await preloadImage(previewURL);
       setChild((c) => ({ ...c, photoURL: previewURL }));
+      // One paint cycle so React has actually committed + the browser has
+      // painted the now-decoded image before the modal covering it goes away.
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
       const photoURL = await uploadChildProfilePhoto(CHILD_ID, blob);
       await saveChild(CHILD_ID, { photoURL });
       // Firestore now has the permanent URL for future page loads; keep
       // showing the already-loaded local preview for the rest of this
       // session rather than swapping to a URL the browser hasn't fetched.
-      closeCropModal();
+      setCropFile(null);
       if (photoInputRef.current) photoInputRef.current.value = "";
     } catch (err) {
       console.error("profile photo upload failed", err);
@@ -376,10 +381,8 @@ export default function Dashboard() {
           file={cropFile}
           saving={uploadingPhoto}
           error={cropError}
-          closing={closingCrop}
           onCancel={handleCropCancel}
           onSave={handleCropSave}
-          onClosed={handleCropModalClosed}
         />
       )}
 
