@@ -56,7 +56,7 @@ export default function GrowthPage() {
   const [activities, setActivities] = useState([]);
   const [weight, setWeight] = useState("");
   const [height, setHeight] = useState("");
-  const [dateInput, setDateInput] = useState("");
+  const [dateInput, setDateInput] = useState(() => toDateInputValue(new Date()));
   const [editingId, setEditingId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [weightCurve, setWeightCurve] = useState([]);
@@ -139,7 +139,7 @@ export default function GrowthPage() {
     setEditingId(null);
     setWeight("");
     setHeight("");
-    setDateInput("");
+    setDateInput(toDateInputValue(new Date()));
   }
 
   async function handleDelete(id) {
@@ -154,17 +154,20 @@ export default function GrowthPage() {
     setSaving(true);
     try {
       const value = { weight: Number(weight), height: Number(height) };
+      const createdAt = dateInput
+        ? Timestamp.fromDate(new Date(`${dateInput}T12:00:00`))
+        : undefined;
       if (editingId) {
         const data = { value };
-        if (dateInput) data.createdAt = Timestamp.fromDate(new Date(`${dateInput}T12:00:00`));
+        if (createdAt) data.createdAt = createdAt;
         await updateActivity(CHILD_ID, editingId, data);
         setEditingId(null);
-        setDateInput("");
       } else {
-        await addActivity(CHILD_ID, { type: "growth", value });
+        await addActivity(CHILD_ID, { type: "growth", value, ...(createdAt ? { createdAt } : {}) });
       }
       setWeight("");
       setHeight("");
+      setDateInput(toDateInputValue(new Date()));
     } finally {
       setSaving(false);
     }
@@ -259,18 +262,17 @@ export default function GrowthPage() {
                 required
               />
             </div>
-            {editingId && (
-              <label className="block text-xs text-abyss/50">
-                วันที่บันทึก
-                <input
-                  type="date"
-                  value={dateInput}
-                  onChange={(e) => setDateInput(e.target.value)}
-                  className="mt-1 w-full rounded-lg border border-shallow px-3 py-2 text-sm"
-                  required
-                />
-              </label>
-            )}
+            <label className="block text-xs text-abyss/50">
+              วันที่บันทึก
+              <input
+                type="date"
+                value={dateInput}
+                max={toDateInputValue(new Date())}
+                onChange={(e) => setDateInput(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-shallow px-3 py-2 text-sm"
+                required
+              />
+            </label>
             <div className="flex gap-2">
               <button
                 type="submit"
