@@ -15,17 +15,33 @@ const CHILD_ID = process.env.NEXT_PUBLIC_CHILD_ID || "main";
 // How long after the last milk feed we start nudging "time to feed again".
 const FEED_REMINDER_HOURS = 3;
 
-function ageLabel(dob) {
-  if (!dob) return "";
+// Calendar-accurate age: borrows from the actual number of days in the
+// preceding month (28/29/30/31) rather than averaging to 30 days, so the
+// day count is always correct against the real calendar.
+function ageDetail(dob) {
   const birth = new Date(dob);
   const now = new Date();
-  let months =
-    (now.getFullYear() - birth.getFullYear()) * 12 +
-    (now.getMonth() - birth.getMonth());
-  if (now.getDate() < birth.getDate()) months -= 1;
-  if (months < 1) return "แรกเกิด";
-  if (months < 24) return `${months} เดือน`;
-  return `${Math.floor(months / 12)} ปี ${months % 12} เดือน`;
+  let years = now.getFullYear() - birth.getFullYear();
+  let months = now.getMonth() - birth.getMonth();
+  let days = now.getDate() - birth.getDate();
+
+  if (days < 0) {
+    months -= 1;
+    days += new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+  }
+  if (months < 0) {
+    years -= 1;
+    months += 12;
+  }
+  return { years, months, days, totalMonths: years * 12 + months };
+}
+
+function ageLabel(dob) {
+  if (!dob) return "";
+  const { years, months, days, totalMonths } = ageDetail(dob);
+  if (totalMonths < 1) return days > 0 ? `${days} วัน` : "แรกเกิด";
+  if (totalMonths < 24) return days > 0 ? `${totalMonths} เดือน ${days} วัน` : `${totalMonths} เดือน`;
+  return days > 0 ? `${years} ปี ${months} เดือน ${days} วัน` : `${years} ปี ${months} เดือน`;
 }
 
 function dobLabel(dob) {
