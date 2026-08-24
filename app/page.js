@@ -9,6 +9,7 @@ import { uploadChildProfilePhoto } from "@/lib/storage";
 import { resizeImageToJpeg } from "@/lib/image";
 import BottomNav from "@/components/BottomNav";
 import WaveDivider from "@/components/WaveDivider";
+import AvatarCropModal from "@/components/AvatarCropModal";
 
 const CHILD_ID = process.env.NEXT_PUBLIC_CHILD_ID || "main";
 
@@ -89,6 +90,8 @@ export default function Dashboard() {
   const [appointments, setAppointments] = useState([]);
   const [dismissedAlerts, setDismissedAlerts] = useState([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [cropFile, setCropFile] = useState(null);
+  const [cropError, setCropError] = useState("");
   const [, forceTick] = useState(0);
   const photoInputRef = useRef(null);
 
@@ -155,20 +158,34 @@ export default function Dashboard() {
     return list.filter((a) => !dismissedAlerts.includes(a.id));
   }, [latestMilk, appointments, dismissedAlerts]);
 
-  async function handlePhotoChange(e) {
+  function handlePhotoChange(e) {
     const file = e.target.files?.[0];
     if (!file) return;
+    setCropError("");
+    setCropFile(file);
+  }
+
+  function handleCropCancel() {
+    setCropFile(null);
+    setCropError("");
+    if (photoInputRef.current) photoInputRef.current.value = "";
+  }
+
+  async function handleCropSave(croppedBlob) {
     setUploadingPhoto(true);
+    setCropError("");
     try {
-      const blob = await resizeImageToJpeg(file, 800, 0.8);
+      const blob = await resizeImageToJpeg(croppedBlob, 800, 0.8);
       const photoURL = await uploadChildProfilePhoto(CHILD_ID, blob);
       await saveChild(CHILD_ID, { photoURL });
       setChild((c) => ({ ...c, photoURL }));
+      setCropFile(null);
+      if (photoInputRef.current) photoInputRef.current.value = "";
     } catch (err) {
       console.error("profile photo upload failed", err);
+      setCropError("บันทึกรูปไม่สำเร็จ ลองใหม่อีกครั้งครับ");
     } finally {
       setUploadingPhoto(false);
-      if (photoInputRef.current) photoInputRef.current.value = "";
     }
   }
 
@@ -328,6 +345,16 @@ export default function Dashboard() {
             </p>
           )}
         </div>
+      )}
+
+      {cropFile && (
+        <AvatarCropModal
+          file={cropFile}
+          saving={uploadingPhoto}
+          error={cropError}
+          onCancel={handleCropCancel}
+          onSave={handleCropSave}
+        />
       )}
 
       <BottomNav />
