@@ -3,15 +3,46 @@
 import { useEffect, useState, useCallback } from "react";
 import Cropper from "react-easy-crop";
 
-// Data URIs (vs. URL.createObjectURL) avoid any object-URL lifecycle races —
-// there's nothing to revoke, so there's no window where the <img> inside
-// Cropper can end up pointed at an already-revoked blob URL.
-function readFileAsDataUrl(file) {
+// Mobile camera photos are routinely 3000-4000px / several MB. Reading that
+// straight into a base64 data URI (the previous approach here) forces the
+// browser to build a ~33% larger string and parse it on the main thread —
+// on a mid-range phone that's a real, visible stall right as the modal
+// opens. Downscaling through a canvas first keeps the same "no object-URL
+// lifecycle to race" property (we hold the resulting blob URL in a plain
+// local variable with explicit, single-owner cleanup below) while working
+// with a fraction of the data: a crop preview never needs more detail than
+// this anyway, and the final output is resized down to 800px regardless.
+function loadPreviewBlobUrl(file, maxSize = 1600) {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(new Error("Failed to read file"));
-    reader.readAsDataURL(file);
+    const sourceUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > maxSize || height > maxSize) {
+        if (width > height) {
+          height = Math.round((height * maxSize) / width);
+          width = maxSize;
+        } else {
+          width = Math.round((width * maxSize) / height);
+          height = maxSize;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(sourceUrl);
+      canvas.toBlob(
+        (blob) => (blob ? resolve(URL.createObjectURL(blob)) : reject(new Error("Canvas toBlob failed"))),
+        "image/jpeg",
+        0.9
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(sourceUrl);
+      reject(new Error("Failed to load image"));
+    };
+    img.src = sourceUrl;
   });
 }
 
@@ -60,11 +91,17 @@ export default function AvatarCropModal({ file, saving, error, onCancel, onSave 
 
   useEffect(() => {
     let cancelled = false;
+    let ownedUrl = null;
     setImageSrc("");
     setLoadError("");
-    readFileAsDataUrl(file)
-      .then((dataUrl) => {
-        if (!cancelled) setImageSrc(dataUrl);
+    loadPreviewBlobUrl(file)
+      .then((url) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        ownedUrl = url;
+        setImageSrc(url);
       })
       .catch((err) => {
         console.error(err);
@@ -72,6 +109,7 @@ export default function AvatarCropModal({ file, saving, error, onCancel, onSave 
       });
     return () => {
       cancelled = true;
+      if (ownedUrl) URL.revokeObjectURL(ownedUrl);
     };
   }, [file]);
 
