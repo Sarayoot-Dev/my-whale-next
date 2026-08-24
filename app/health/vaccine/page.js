@@ -17,6 +17,7 @@ export default function VaccinePage() {
   const [chronicConditions, setChronicConditions] = useState("");
   const [medications, setMedications] = useState("");
   const [drugAllergies, setDrugAllergies] = useState("");
+  const [foodAllergies, setFoodAllergies] = useState("");
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -30,6 +31,7 @@ export default function VaccinePage() {
       setChronicConditions(c?.chronicConditions || "");
       setMedications(c?.medications || "");
       setDrugAllergies(c?.drugAllergies || "");
+      setFoodAllergies(c?.foodAllergies || "");
     });
   }, [user]);
 
@@ -43,7 +45,13 @@ export default function VaccinePage() {
     e.preventDefault();
     setSaving(true);
     try {
-      await saveChild(CHILD_ID, { doctorName, chronicConditions, medications, drugAllergies });
+      await saveChild(CHILD_ID, {
+        doctorName,
+        chronicConditions,
+        medications,
+        drugAllergies,
+        foodAllergies,
+      });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } finally {
@@ -95,6 +103,13 @@ export default function VaccinePage() {
               placeholder="ประวัติแพ้ยา"
               value={drugAllergies}
               onChange={(e) => setDrugAllergies(e.target.value)}
+              className="w-full rounded-lg border border-shallow px-3 py-2 text-sm"
+            />
+            <input
+              type="text"
+              placeholder="ประวัติแพ้อาหาร (เช่น ชื่ออาหาร + อาการแพ้)"
+              value={foodAllergies}
+              onChange={(e) => setFoodAllergies(e.target.value)}
               className="w-full rounded-lg border border-shallow px-3 py-2 text-sm"
             />
             <button
